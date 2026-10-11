@@ -41,9 +41,15 @@ is `false`, preserving the existing sequential behavior. When enabled, the
 manager preflights the entire batch against simulated copies of the budgets.
 If any request fails, no purchases are made; otherwise all requests execute.
 
+## Q12 — Vendors
+Added vendor offers per catalogue resource. The acquisition manager selects
+the cheapest vendor, applies the resource's existing pricing rules, and
+records the chosen vendor in purchase and cancellation history. Resources
+without vendor offers retain their catalogue pricing.
+
 ## Verification
 Build with `cmake --build build`.
 Run tests with `./build/bookmgmt_tests`.
-The current test suite passes 258/258 checks.
+The current test suite passes 283/283 checks.
 
-Questions Q12–Q16 remain to be implemented.
+Questions Q13–Q16 remain to be implemented.

@@ -187,6 +187,30 @@ int main() {
               << ", AT1 holdings " << atomicCatalog.holdings("AT1")
               << ", AT2 holdings " << atomicCatalog.holdings("AT2") << "\n";
 
+    std::cout << "\n=== Vendor selection demo (Q12) ===\n";
+    Catalog vendorCatalog;
+    vendorCatalog.emplace<Book>(
+        "VD1", "Vendor Comparison", std::vector<std::string>{"Demo Author"},
+        "ISBN-VD1", "Demo Press", 2025, Money::of(120));
+
+    Budget vendorBudget(Money::of(1000));
+    AcquisitionManager vendorAcq(vendorCatalog, vendorBudget);
+
+    vendorAcq.addVendorOffer("VD1", "Book House", Money::of(110));
+    vendorAcq.addVendorOffer("VD1", "Campus Books", Money::of(95));
+
+    std::cout << "Catalogue unit price: "
+              << vendorCatalog.get("VD1").unitPrice() << "\n";
+    std::cout << "Book House offer: 110.00\n";
+    std::cout << "Campus Books offer: 95.00\n";
+    std::cout << "Quote for 2 copies at the cheapest offer: "
+              << vendorAcq.quotePreTax("VD1", 2) << "\n";
+
+    const auto& vendorOrder = vendorAcq.purchase("VD1", 2);
+    std::cout << "Chosen vendor: " << vendorOrder.vendor << "\n";
+    std::cout << "Recorded pre-tax total: " << vendorOrder.preTaxCost << "\n";
+    vendorAcq.printReport(std::cout);
+
     // Direct purchase: errors are reported with exceptions
     std::cout << "\n=== Direct purchase that breaks a quota ===\n";
     try {

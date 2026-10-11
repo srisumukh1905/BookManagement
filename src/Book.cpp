@@ -26,8 +26,15 @@ Book::Book(std::string id, std::string title, std::vector<std::string> authors,
 }
 
 Money Book::costFor(int quantity) const {
+    return costForAtPrice(quantity, unitPrice());
+}
+
+Money Book::costForAtPrice(int quantity, Money offeredUnitPrice) const {
     requirePositive(quantity);
-    Money totalCost = unitPrice() * quantity;
+    if (offeredUnitPrice.isNegative())
+        throw std::invalid_argument("price must not be negative");
+
+    Money totalCost = offeredUnitPrice * quantity;
 
     if (binding_ == Binding::Hardcover) {
         // Apply the 20% hardcover premium before any bulk discount.

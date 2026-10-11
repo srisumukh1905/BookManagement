@@ -11,6 +11,11 @@
 
 namespace bookmgmt {
 
+struct VendorOffer {
+    std::string vendor;
+    Money unitPrice;
+};
+
 struct PurchaseRequest {
     std::string resourceId;
     int quantity;  // copies for print, seats for electronic
@@ -30,11 +35,18 @@ struct PurchaseRecord {
     bool isCancellation = false;
     int cancelsOrderNo = 0;
     std::string department;
+    std::string vendor;
 };
 
 class AcquisitionManager {
 public:
     AcquisitionManager(Catalog& catalog, Budget& budget);
+
+    // Record or update a vendor's offered unit price for a catalogue resource.
+    void addVendorOffer(const std::string& resourceId,
+                        const std::string& vendor, Money unitPrice);
+    const std::vector<VendorOffer>& vendorOffersFor(
+        const std::string& resourceId) const;
 
     // Create an independent budget for a named department.
     Budget& addDepartment(const std::string& name, Money total);
@@ -86,14 +98,20 @@ private:
                            Money preTaxCost, Money cost, bool approved,
                            std::string reason, bool isCancellation = false,
                            int cancelsOrderNo = 0,
-                           std::string department = {});
+                           std::string department = {},
+                           std::string vendor = {});
     bool hasCancellation(int orderNo) const;
     Budget& budgetForRequest(const std::string& department);
     const Budget& budgetForRequest(const std::string& department) const;
+    const VendorOffer* cheapestVendorOffer(
+        const std::string& resourceId) const;
+    Money costAtBestVendor(const Resource& resource, int quantity,
+                           std::string* vendor = nullptr) const;
 
     Catalog& catalog_;
     Budget& budget_;
     std::map<std::string, Budget> departmentBudgets_;
+    std::map<std::string, std::vector<VendorOffer>> vendorOffers_;
     std::vector<PurchaseRecord> history_;
     int nextOrderNo_ = 1;
 

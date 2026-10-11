@@ -13,6 +13,58 @@ namespace bookmgmt {
 AcquisitionManager::AcquisitionManager(Catalog& catalog, Budget& budget)
     : catalog_(catalog), budget_(budget) {}
 
+void AcquisitionManager::addVendorOffer(
+    const std::string& resourceId, const std::string& vendor, Money unitPrice) {
+    (void)catalog_.get(resourceId);
+
+    if (vendor.empty()) {
+        throw std::invalid_argument("vendor name cannot be empty");
+    }
+    if (unitPrice.isNegative()) {
+        throw std::invalid_argument("vendor price must not be negative");
+    }
+
+    auto& offers = vendorOffers_[resourceId];
+    for (auto& offer : offers) {
+        if (offer.vendor == vendor) {
+            offer.unitPrice = unitPrice;
+            return;
+        }
+    }
+    offers.push_back(VendorOffer{vendor, unitPrice});
+}
+
+const std::vector<VendorOffer>& AcquisitionManager::vendorOffersFor(
+    const std::string& resourceId) const {
+    (void)catalog_.get(resourceId);
+    static const std::vector<VendorOffer> empty;
+    const auto it = vendorOffers_.find(resourceId);
+    return it == vendorOffers_.end() ? empty : it->second;
+}
+
+const VendorOffer* AcquisitionManager::cheapestVendorOffer(
+    const std::string& resourceId) const {
+    const auto it = vendorOffers_.find(resourceId);
+    if (it == vendorOffers_.end() || it->second.empty()) return nullptr;
+
+    const VendorOffer* cheapest = &it->second.front();
+    for (const auto& offer : it->second) {
+        if (offer.unitPrice < cheapest->unitPrice) cheapest = &offer;
+    }
+    return cheapest;
+}
+
+Money AcquisitionManager::costAtBestVendor(
+    const Resource& resource, int quantity, std::string* vendor) const {
+    const VendorOffer* offer = cheapestVendorOffer(resource.id());
+    if (offer) {
+        if (vendor) *vendor = offer->vendor;
+        return resource.costForAtPrice(quantity, offer->unitPrice);
+    }
+    if (vendor) vendor->clear();
+    return resource.costFor(quantity);
+}
+
 Budget& AcquisitionManager::addDepartment(const std::string& name,
                                           Money total) {
     if (name.empty()) {
@@ -82,12 +134,13 @@ Money AcquisitionManager::applyTax(const Resource& resource,
 
 Money AcquisitionManager::quotePreTax(const std::string& id,
                                       int quantity) const {
-    return catalog_.get(id).costFor(quantity);
+    const Resource& resource = catalog_.get(id);
+    return costAtBestVendor(resource, quantity);
 }
 
 Money AcquisitionManager::quote(const std::string& id, int quantity) const {
     const Resource& resource = catalog_.get(id);
-    return applyTax(resource, resource.costFor(quantity));
+    return applyTax(resource, costAtBestVendor(resource, quantity));
 }
 
 bool AcquisitionManager::canPurchase(const std::string& id, int quantity,
@@ -104,7 +157,7 @@ bool AcquisitionManager::canPurchase(const std::string& id, int quantity,
         if (quantity <= 0) {
             why = "quantity must be positive";
         } else {
-            const Money preTaxCost = resource->costFor(quantity);
+            const Money preTaxCost = costAtBestVendor(*resource, quantity);
             const Money cost = applyTax(*resource, preTaxCost);
 
             try {
@@ -125,13 +178,15 @@ bool AcquisitionManager::canPurchase(const std::string& id, int quantity,
 PurchaseRecord& AcquisitionManager::record(
     const Resource* resource, const std::string& id, int quantity,
     Money preTaxCost, Money cost, bool approved, std::string reason,
-    bool isCancellation, int cancelsOrderNo, std::string department) {
+    bool isCancellation, int cancelsOrderNo, std::string department,
+    std::string vendor) {
     history_.push_back(PurchaseRecord{
         nextOrderNo_++, id,
         resource ? resource->title() : std::string("(unknown)"),
         resource ? resource->category() : ResourceCategory::Book,
         quantity, preTaxCost, cost, approved, std::move(reason),
-        isCancellation, cancelsOrderNo, std::move(department)});
+        isCancellation, cancelsOrderNo, std::move(department),
+        std::move(vendor)});
     return history_.back();
 }
 
@@ -152,7 +207,8 @@ const PurchaseRecord& AcquisitionManager::purchase(
 const PurchaseRecord& AcquisitionManager::purchase(
     const std::string& id, int quantity, const std::string& department) {
     const Resource& resource = catalog_.get(id);
-    const Money preTaxCost = resource.costFor(quantity);
+    std::string vendor;
+    const Money preTaxCost = costAtBestVendor(resource, quantity, &vendor);
     const Money cost = applyTax(resource, preTaxCost);
 
     budgetForRequest(department).commit(
@@ -160,7 +216,7 @@ const PurchaseRecord& AcquisitionManager::purchase(
     catalog_.addHoldings(id, quantity);
 
     return record(&resource, id, quantity, preTaxCost, cost, true, {},
-                  false, 0, department);
+                  false, 0, department, vendor);
 }
 
 const PurchaseRecord& AcquisitionManager::cancel(int orderNo) {
@@ -227,7 +283,7 @@ const PurchaseRecord& AcquisitionManager::cancel(int orderNo) {
     return record(&resource, original.resourceId, -original.quantity,
                   negativePreTax, negativeCost, true,
                   "cancels order #" + std::to_string(original.orderNo),
-                  true, original.orderNo, original.department);
+                  true, original.orderNo, original.department, original.vendor);
 }
 
 std::vector<PurchaseRecord> AcquisitionManager::processBatch(
@@ -248,7 +304,7 @@ std::vector<PurchaseRecord> AcquisitionManager::processBatch(
             } else if (request.quantity <= 0) {
                 why = "quantity must be positive";
             } else {
-                preTaxCost = resource->costFor(request.quantity);
+                preTaxCost = costAtBestVendor(*resource, request.quantity);
                 cost = applyTax(*resource, preTaxCost);
 
                 try {
@@ -296,7 +352,7 @@ std::vector<PurchaseRecord> AcquisitionManager::processBatch(
         } else if (request.quantity <= 0) {
             item.reason = "quantity must be positive";
         } else {
-            item.preTaxCost = item.resource->costFor(request.quantity);
+            item.preTaxCost = costAtBestVendor(*item.resource, request.quantity);
             item.cost = applyTax(*item.resource, item.preTaxCost);
 
             Budget* target = nullptr;
@@ -395,6 +451,9 @@ void AcquisitionManager::printReport(std::ostream& os) const {
 
         if (!entry.department.empty()) {
             os << "  [department: " << entry.department << "]";
+        }
+        if (!entry.vendor.empty()) {
+            os << "  [vendor: " << entry.vendor << "]";
         }
 
         if (entry.isCancellation) {

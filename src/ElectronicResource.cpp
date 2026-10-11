@@ -26,11 +26,18 @@ ElectronicResource::ElectronicResource(std::string id, std::string title,
 }
 
 Money ElectronicResource::costFor(int seats) const {
+    return costForAtPrice(seats, unitPrice());
+}
+
+Money ElectronicResource::costForAtPrice(
+    int seats, Money offeredUnitPrice) const {
     requirePositive(seats);
+    if (offeredUnitPrice.isNegative())
+        throw std::invalid_argument("price must not be negative");
 
     const int regularSeats = std::min(seats, 50);
     const int discountedSeats = seats - regularSeats;
-    const std::int64_t unitMinor = unitPrice().minorUnits();
+    const std::int64_t unitMinor = offeredUnitPrice.minorUnits();
     const std::int64_t extraCount = discountedSeats;
 
     // Seats after the 50th cost half price. Round the total half-price
@@ -39,7 +46,7 @@ Money ElectronicResource::costFor(int seats) const {
         (unitMinor / 2) * extraCount +
         ((unitMinor % 2) * extraCount + 1) / 2;
 
-    return platformFee_ + unitPrice() * regularSeats +
+    return platformFee_ + offeredUnitPrice * regularSeats +
            Money::fromMinor(discountedMinor);
 }
 

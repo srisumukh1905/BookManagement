@@ -650,6 +650,63 @@ static void testBatchAllOrNothing() {
     CHECK(acq.history().size() == 4);
 }
 
+
+static void testVendors() {
+    Catalog c;
+    c.emplace<Book>("V1", "Vendor Choice", std::vector<std::string>{"A"},
+                    "isbn", "P", 2025, Money::of(150), 1, Binding::Hardcover);
+
+    Budget b(Money::of(1000));
+    AcquisitionManager acq(c, b);
+    acq.setTaxRates(10, 18);
+
+    acq.addVendorOffer("V1", "Vendor A", Money::of(100));
+    acq.addVendorOffer("V1", "Vendor B", Money::of(80));
+
+    CHECK(acq.vendorOffersFor("V1").size() == 2);
+    CHECK(acq.quotePreTax("V1", 1) == Money::of(96));
+    CHECK(acq.quote("V1", 1) == Money::fromMinor(10560));
+    CHECK(c.get("V1").unitPrice() == Money::of(150));
+
+    std::string why;
+    CHECK(acq.canPurchase("V1", 1, &why) && why.empty());
+
+    const auto& order = acq.purchase("V1", 1);
+    const int orderNo = order.orderNo;
+    CHECK(order.approved);
+    CHECK(order.vendor == "Vendor B");
+    CHECK(order.preTaxCost == Money::of(96));
+    CHECK(order.cost == Money::fromMinor(10560));
+    CHECK(b.spent() == Money::fromMinor(10560));
+    CHECK(c.holdings("V1") == 1);
+    CHECK(c.get("V1").unitPrice() == Money::of(150));
+
+    const auto& cancelled = acq.cancel(orderNo);
+    CHECK(cancelled.isCancellation);
+    CHECK(cancelled.vendor == "Vendor B");
+    CHECK(b.spent() == Money{});
+    CHECK(c.holdings("V1") == 0);
+
+    // Adding the same vendor updates its offer instead of adding a duplicate.
+    acq.addVendorOffer("V1", "Vendor B", Money::of(70));
+    CHECK(acq.vendorOffersFor("V1").size() == 2);
+    CHECK(acq.quotePreTax("V1", 1) == Money::of(84));
+
+    // Batch purchases use the same cheapest-vendor calculation.
+    auto batch = acq.processBatch({{"V1", 1}}, true);
+    CHECK(batch.size() == 1 && batch[0].approved);
+    CHECK(batch[0].vendor == "Vendor B");
+    CHECK(batch[0].preTaxCost == Money::of(84));
+    CHECK(batch[0].cost == Money::fromMinor(9240));
+
+    CHECK_THROWS(acq.addVendorOffer("missing", "Vendor", Money::of(1)),
+                 NotFoundError);
+    CHECK_THROWS(acq.addVendorOffer("V1", "", Money::of(1)),
+                 std::invalid_argument);
+    CHECK_THROWS(acq.addVendorOffer("V1", "Negative", Money::fromMinor(-1)),
+                 std::invalid_argument);
+}
+
 int main() {
     testMoney();
     testResourcesAndCost();
@@ -667,6 +724,7 @@ int main() {
     testDepartmentBudgets();
     testBudgetRollover();
     testBatchAllOrNothing();
+    testVendors();
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;
 }

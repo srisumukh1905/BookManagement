@@ -24,8 +24,15 @@ Journal::Journal(std::string id, std::string title, std::string issn,
 }
 
 Money Journal::costFor(int copies) const {
+    return costForAtPrice(copies, unitPrice());
+}
+
+Money Journal::costForAtPrice(int copies, Money offeredUnitPrice) const {
     requirePositive(copies);
-    const Money totalCost = unitPrice() * copies * subscriptionYears_;
+    if (offeredUnitPrice.isNegative())
+        throw std::invalid_argument("price must not be negative");
+
+    const Money totalCost = offeredUnitPrice * copies * subscriptionYears_;
     return applyPrintBulkDiscount(totalCost, copies);
 }
 
