@@ -58,9 +58,14 @@ electronic-resource sessions by patron. Borrowing and session opening are
 limited by catalogue holdings; returns and session closure release capacity.
 Invalid operations, duplicate active use, and unknown resources are rejected.
 
+## Q15 — Currency-aware Money
+Extended `Money` with a currency code, defaulting to INR for compatibility
+with existing code. Addition, subtraction, and comparisons require matching
+currency codes and throw `std::invalid_argument` when currencies differ.
+Added tests and a demo for currency-aware amounts and cross-currency rejection.
+
 ## Verification
 Build with `cmake --build build`.
 Run tests with `./build/bookmgmt_tests`.
-The current test suite passes 328/328 checks.
-
-Questions Q15–Q16 remain to be implemented.
+The current test suite passes 340/340 checks.
+Question Q16 remains to be implemented.

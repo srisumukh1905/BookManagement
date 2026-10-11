@@ -264,5 +264,19 @@ int main() {
     } catch (const QuotaExceededError& e) {
         std::cout << "QuotaExceededError: " << e.what() << "\n";
     }
+    std::cout << "\n=== Money currencies demo (Q15) ===\n";
+    const Money inr = Money::of(100, "INR");
+    const Money usd = Money::of(100, "USD");
+
+    std::cout << "INR amount: " << inr << " " << inr.currencyCode() << "\n";
+    std::cout << "USD amount: " << usd << " " << usd.currencyCode() << "\n";
+
+    try {
+        (void)(inr + usd);
+    } catch (const std::invalid_argument& e) {
+        std::cout << "Cross-currency addition rejected: "
+                  << e.what() << "\n";
+    }
+
     return 0;
 }

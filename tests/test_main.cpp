@@ -797,6 +797,30 @@ static void testLending() {
     CHECK_THROWS(lending.openSession("L2", ""), std::invalid_argument);
 }
 
+
+static void testMoneyCurrencies() {
+    using bookmgmt::Money;
+
+    const Money inr = Money::of(100, "INR");
+    const Money usd = Money::of(100, "USD");
+
+    CHECK(inr.currencyCode() == "INR");
+    CHECK(usd.currencyCode() == "USD");
+
+    CHECK((Money::of(10, "INR") + Money::of(5, "INR")).minorUnits() == 1500);
+    CHECK((Money::of(10, "INR") - Money::of(5, "INR")).minorUnits() == 500);
+
+    CHECK_THROWS(inr + usd, std::invalid_argument);
+    CHECK_THROWS(inr - usd, std::invalid_argument);
+
+    CHECK_THROWS(inr == usd, std::invalid_argument);
+    CHECK_THROWS(inr != usd, std::invalid_argument);
+    CHECK_THROWS(inr < usd, std::invalid_argument);
+    CHECK_THROWS(inr <= usd, std::invalid_argument);
+    CHECK_THROWS(inr > usd, std::invalid_argument);
+    CHECK_THROWS(inr >= usd, std::invalid_argument);
+}
+
 int main() {
     testMoney();
     testResourcesAndCost();
@@ -817,6 +841,7 @@ int main() {
     testVendors();
     testCatalogAdvancedSearch();
     testLending();
+    testMoneyCurrencies();
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;
 }
