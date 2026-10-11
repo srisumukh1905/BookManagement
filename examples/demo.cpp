@@ -211,6 +211,20 @@ int main() {
     std::cout << "Recorded pre-tax total: " << vendorOrder.preTaxCost << "\n";
     vendorAcq.printReport(std::cout);
 
+    std::cout << "\n=== Catalogue search demo (Q13) ===\n";
+
+    std::cout << "Books matching author Robert:\n";
+    for (const Resource* r : catalog.searchAuthor("robert"))
+        std::cout << "  " << r->summary() << "\n";
+
+    std::cout << "Resource matching ISBN 978-0132350884:\n";
+    for (const Resource* r : catalog.searchIsbnIssn("978-0132350884"))
+        std::cout << "  " << r->summary() << "\n";
+
+    std::cout << "Resources published from 2024 through 2026:\n";
+    for (const Resource* r : catalog.searchYearRange(2024, 2026))
+        std::cout << "  " << r->summary() << "\n";
+
     // Direct purchase: errors are reported with exceptions
     std::cout << "\n=== Direct purchase that breaks a quota ===\n";
     try {

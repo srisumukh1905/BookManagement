@@ -47,9 +47,14 @@ the cheapest vendor, applies the resource's existing pricing rules, and
 records the chosen vendor in purchase and cancellation history. Resources
 without vendor offers retain their catalogue pricing.
 
+## Q13 — Catalogue searches
+Added case-insensitive author searches across books and e-books, ISBN/ISSN
+identifier searches across books, e-books and journals, and inclusive
+publication-year range searches. Reversed year ranges are rejected.
+
 ## Verification
 Build with `cmake --build build`.
 Run tests with `./build/bookmgmt_tests`.
-The current test suite passes 283/283 checks.
+The current test suite passes 299/299 checks.
 
-Questions Q13–Q16 remain to be implemented.
+Questions Q14–Q16 remain to be implemented.

@@ -707,6 +707,35 @@ static void testVendors() {
                  std::invalid_argument);
 }
 
+
+static void testCatalogAdvancedSearch() {
+    Catalog c;
+    c.emplace<Book>("S1", "Search Book", std::vector<std::string>{"Jane Doe", "Alex Morgan"}, "ISBN-001", "Pub", 2018, Money::of(20));
+    c.emplace<EBook>("S2", "Digital Search", std::vector<std::string>{"Alex Morgan"}, "ISBN-002", "Pub", 2022, Money::of(10), "url", EBookFormat::PDF, false);
+    c.emplace<Journal>("S3", "Search Journal", "ISSN-003", 12, "Pub", 2020, Money::of(30));
+    c.emplace<AudioBook>("S4", "Audio Title", "Alex Narrator", 100, "Pub", 2021, Money::of(10), "url");
+
+    CHECK(c.searchAuthor("aLeX").size() == 2);
+    CHECK(c.searchAuthor("morgan").size() == 2);
+    CHECK(c.searchAuthor("narrator").empty());
+    CHECK(c.searchAuthor("").empty());
+
+    CHECK(c.searchIsbnIssn("isbn-001").size() == 1);
+    CHECK(c.searchIsbnIssn("ISBN-002").size() == 1);
+    CHECK(c.searchIsbnIssn("issn-003").size() == 1);
+    CHECK(c.searchIsbnIssn("003").empty());
+    CHECK(c.searchIsbnIssn("").empty());
+
+    auto years = c.searchYearRange(2020, 2022);
+    CHECK(years.size() == 3);
+    CHECK(years[0]->year() == 2022);
+    CHECK(years[1]->year() == 2020);
+    CHECK(years[2]->year() == 2021);
+    CHECK(c.searchYearRange(2022, 2022).size() == 1);
+    CHECK(c.searchYearRange(2023, 2024).empty());
+    CHECK_THROWS(c.searchYearRange(2023, 2022), std::invalid_argument);
+}
+
 int main() {
     testMoney();
     testResourcesAndCost();
@@ -725,6 +754,7 @@ int main() {
     testBudgetRollover();
     testBatchAllOrNothing();
     testVendors();
+    testCatalogAdvancedSearch();
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;
 }

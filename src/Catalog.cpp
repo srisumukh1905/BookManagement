@@ -5,6 +5,9 @@
 #include <stdexcept>
 
 #include "bookmgmt/Exceptions.h"
+#include "bookmgmt/Book.h"
+#include "bookmgmt/EBook.h"
+#include "bookmgmt/Journal.h"
 
 namespace bookmgmt {
 
@@ -85,6 +88,59 @@ std::vector<const Resource*> Catalog::searchTitle(const std::string& text) const
     const std::string needle = lower(text);
     return where([&needle](const Resource& r) {
         return lower(r.title()).find(needle) != std::string::npos;
+    });
+}
+
+std::vector<const Resource*> Catalog::searchAuthor(
+    const std::string& text) const {
+    const std::string needle = lower(text);
+    if (needle.empty()) return {};
+
+    return where([&needle](const Resource& resource) {
+        const auto matches = [&needle](const std::vector<std::string>& authors) {
+            for (const auto& author : authors) {
+                if (lower(author).find(needle) != std::string::npos) return true;
+            }
+            return false;
+        };
+
+        if (const auto* book = dynamic_cast<const Book*>(&resource)) {
+            return matches(book->authors());
+        }
+        if (const auto* ebook = dynamic_cast<const EBook*>(&resource)) {
+            return matches(ebook->authors());
+        }
+        return false;
+    });
+}
+
+std::vector<const Resource*> Catalog::searchIsbnIssn(
+    const std::string& identifier) const {
+    const std::string needle = lower(identifier);
+    if (needle.empty()) return {};
+
+    return where([&needle](const Resource& resource) {
+        if (const auto* book = dynamic_cast<const Book*>(&resource)) {
+            return lower(book->isbn()) == needle;
+        }
+        if (const auto* ebook = dynamic_cast<const EBook*>(&resource)) {
+            return lower(ebook->isbn()) == needle;
+        }
+        if (const auto* journal = dynamic_cast<const Journal*>(&resource)) {
+            return lower(journal->issn()) == needle;
+        }
+        return false;
+    });
+}
+
+std::vector<const Resource*> Catalog::searchYearRange(
+    int firstYear, int lastYear) const {
+    if (firstYear > lastYear) {
+        throw std::invalid_argument("first year must not exceed last year");
+    }
+
+    return where([firstYear, lastYear](const Resource& resource) {
+        return resource.year() >= firstYear && resource.year() <= lastYear;
     });
 }
 
