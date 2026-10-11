@@ -231,43 +231,132 @@ const PurchaseRecord& AcquisitionManager::cancel(int orderNo) {
 }
 
 std::vector<PurchaseRecord> AcquisitionManager::processBatch(
-    const std::vector<PurchaseRequest>& requests) {
+    const std::vector<PurchaseRequest>& requests, bool allOrNothing) {
     std::vector<PurchaseRecord> results;
     results.reserve(requests.size());
 
-    for (const auto& request : requests) {
-        const Resource* resource = catalog_.find(request.resourceId);
+    // Preserve the original sequential behavior unless requested otherwise.
+    if (!allOrNothing) {
+        for (const auto& request : requests) {
+            const Resource* resource = catalog_.find(request.resourceId);
+            Money preTaxCost;
+            Money cost;
+            std::string why;
+
+            if (!resource) {
+                why = "resource not found: " + request.resourceId;
+            } else if (request.quantity <= 0) {
+                why = "quantity must be positive";
+            } else {
+                preTaxCost = resource->costFor(request.quantity);
+                cost = applyTax(*resource, preTaxCost);
+
+                try {
+                    why = budgetForRequest(request.department).check(
+                        resource->category(), request.quantity, cost,
+                        resource->title());
+                } catch (const std::invalid_argument& error) {
+                    why = error.what();
+                }
+            }
+
+            if (why.empty()) {
+                results.push_back(purchase(
+                    request.resourceId, request.quantity, request.department));
+            } else {
+                results.push_back(record(
+                    resource, request.resourceId, request.quantity,
+                    preTaxCost, cost, false, why, false, 0,
+                    request.department));
+            }
+        }
+        return results;
+    }
+
+    // Preflight against copies so rejected batches cannot change real budgets.
+    struct PendingRequest {
+        const Resource* resource = nullptr;
         Money preTaxCost;
         Money cost;
-        std::string why;
+        std::string reason;
+    };
 
-        if (!resource) {
-            why = "resource not found: " + request.resourceId;
+    std::vector<PendingRequest> pending;
+    pending.reserve(requests.size());
+
+    Budget simulatedDefault = budget_;
+    auto simulatedDepartments = departmentBudgets_;
+
+    for (const auto& request : requests) {
+        PendingRequest item;
+        item.resource = catalog_.find(request.resourceId);
+
+        if (!item.resource) {
+            item.reason = "resource not found: " + request.resourceId;
         } else if (request.quantity <= 0) {
-            why = "quantity must be positive";
+            item.reason = "quantity must be positive";
         } else {
-            preTaxCost = resource->costFor(request.quantity);
-            cost = applyTax(*resource, preTaxCost);
+            item.preTaxCost = item.resource->costFor(request.quantity);
+            item.cost = applyTax(*item.resource, item.preTaxCost);
 
-            try {
-                why = budgetForRequest(request.department).check(
-                    resource->category(), request.quantity, cost,
-                    resource->title());
-            } catch (const std::invalid_argument& error) {
-                why = error.what();
+            Budget* target = nullptr;
+            if (request.department.empty()) {
+                target = &simulatedDefault;
+            } else {
+                auto it = simulatedDepartments.find(request.department);
+                if (it == simulatedDepartments.end()) {
+                    item.reason = "unknown department: " + request.department;
+                } else {
+                    target = &it->second;
+                }
+            }
+
+            if (item.reason.empty()) {
+                item.reason = target->check(
+                    item.resource->category(), request.quantity,
+                    item.cost, item.resource->title());
+
+                if (item.reason.empty()) {
+                    target->commit(item.resource->category(),
+                                   request.quantity, item.cost,
+                                   item.resource->title());
+                }
             }
         }
 
-        if (why.empty()) {
-            results.push_back(
-                purchase(request.resourceId, request.quantity,
-                         request.department));
-        } else {
-            results.push_back(record(
-                resource, request.resourceId, request.quantity,
-                preTaxCost, cost, false, why, false, 0,
-                request.department));
+        pending.push_back(std::move(item));
+    }
+
+    int failedIndex = -1;
+    for (std::size_t i = 0; i < pending.size(); ++i) {
+        if (!pending[i].reason.empty()) {
+            failedIndex = static_cast<int>(i);
+            break;
         }
+    }
+
+    if (failedIndex >= 0) {
+        const std::string failedResource =
+            requests[static_cast<std::size_t>(failedIndex)].resourceId;
+        for (std::size_t i = 0; i < requests.size(); ++i) {
+            std::string why = pending[i].reason;
+            if (why.empty()) {
+                why = "batch aborted because request " + failedResource +
+                      " would be rejected";
+            }
+            results.push_back(record(
+                pending[i].resource, requests[i].resourceId,
+                requests[i].quantity, pending[i].preTaxCost,
+                pending[i].cost, false, std::move(why), false, 0,
+                requests[i].department));
+        }
+        return results;
+    }
+
+    // Every request passed preflight; now execute the complete batch.
+    for (const auto& request : requests) {
+        results.push_back(
+            purchase(request.resourceId, request.quantity, request.department));
     }
 
     return results;

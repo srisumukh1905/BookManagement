@@ -68,8 +68,10 @@ public:
     const PurchaseRecord& cancel(int orderNo);
 
     // Processes requests in order; every outcome is recorded.
+    // If allOrNothing is true, rejects the entire batch if any request fails.
     std::vector<PurchaseRecord> processBatch(
-        const std::vector<PurchaseRequest>& reqs);
+        const std::vector<PurchaseRequest>& reqs,
+        bool allOrNothing = false);
 
     const std::vector<PurchaseRecord>& history() const { return history_; }
     Money totalPreTax() const;

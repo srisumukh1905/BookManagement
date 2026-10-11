@@ -151,6 +151,42 @@ int main() {
         std::cout << "  " << r->id() << ": " << catalog.holdings(r->id())
                   << (r->isDigital() ? " seats" : " copies") << "\n";
 
+    std::cout << "\n=== All-or-nothing batch demo (Q11) ===\n";
+    Catalog atomicCatalog;
+    atomicCatalog.emplace<Book>(
+        "AT1", "Atomic Demo One", std::vector<std::string>{"Demo Author"},
+        "ISBN-AT1", "Demo Press", 2025, Money::of(100));
+    atomicCatalog.emplace<Book>(
+        "AT2", "Atomic Demo Two", std::vector<std::string>{"Demo Author"},
+        "ISBN-AT2", "Demo Press", 2025, Money::of(100));
+
+    Budget atomicBudget(Money::of(250));
+    atomicBudget.setQuota(ResourceCategory::Book, {3, Money::of(250)});
+    AcquisitionManager atomicAcq(atomicCatalog, atomicBudget);
+
+    std::cout << "Attempt 1: one request fits, but the complete batch exceeds budget\n";
+    const auto aborted = atomicAcq.processBatch(
+        {{"AT1", 1}, {"AT2", 2}}, true);
+    for (const auto& result : aborted) {
+        std::cout << "  " << result.resourceId << ": "
+                  << (result.approved ? "APPROVED" : "REJECTED")
+                  << " - " << result.reason << "\n";
+    }
+    std::cout << "After rejection: spent " << atomicBudget.spent()
+              << ", AT1 holdings " << atomicCatalog.holdings("AT1")
+              << ", AT2 holdings " << atomicCatalog.holdings("AT2") << "\n";
+
+    std::cout << "Attempt 2: both requests fit\n";
+    const auto accepted = atomicAcq.processBatch(
+        {{"AT1", 1}, {"AT2", 1}}, true);
+    for (const auto& result : accepted) {
+        std::cout << "  " << result.resourceId << ": "
+                  << (result.approved ? "APPROVED" : "REJECTED") << "\n";
+    }
+    std::cout << "After approval: spent " << atomicBudget.spent()
+              << ", AT1 holdings " << atomicCatalog.holdings("AT1")
+              << ", AT2 holdings " << atomicCatalog.holdings("AT2") << "\n";
+
     // Direct purchase: errors are reported with exceptions
     std::cout << "\n=== Direct purchase that breaks a quota ===\n";
     try {

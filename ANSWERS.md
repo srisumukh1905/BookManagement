@@ -35,9 +35,15 @@ while spending, category usage, and title usage reset.
 
 The rollover percentage must be between 0 and 100 inclusive.
 
+## Q11 — All-or-nothing batch processing
+Added an optional `allOrNothing` argument to `processBatch()`. Its default
+is `false`, preserving the existing sequential behavior. When enabled, the
+manager preflights the entire batch against simulated copies of the budgets.
+If any request fails, no purchases are made; otherwise all requests execute.
+
 ## Verification
 Build with `cmake --build build`.
 Run tests with `./build/bookmgmt_tests`.
-The current test suite passes 243/243 checks.
+The current test suite passes 258/258 checks.
 
-Questions Q11–Q16 remain to be implemented.
+Questions Q12–Q16 remain to be implemented.

@@ -614,6 +614,42 @@ static void testBudgetRollover() {
     CHECK_THROWS(b.nextYear(101), std::invalid_argument);
 }
 
+
+static void testBatchAllOrNothing() {
+    Catalog c;
+    c.emplace<Book>("AO1", "Atomic Book One",
+                    std::vector<std::string>{"A"}, "isbn1", "P", 2024,
+                    Money::of(100));
+    c.emplace<Book>("AO2", "Atomic Book Two",
+                    std::vector<std::string>{"B"}, "isbn2", "P", 2024,
+                    Money::of(100));
+
+    Budget b(Money::of(250));
+    b.setQuota(ResourceCategory::Book, {3, Money::of(250)});
+    AcquisitionManager acq(c, b);
+
+    // First request fits, but the second would exceed the remaining budget.
+    auto rejected = acq.processBatch({{"AO1", 1}, {"AO2", 2}}, true);
+    CHECK(rejected.size() == 2);
+    CHECK(!rejected[0].approved && !rejected[1].approved);
+    CHECK(rejected[0].reason.find("batch aborted") != std::string::npos);
+    CHECK(!rejected[1].reason.empty());
+    CHECK(b.spent() == Money{});
+    CHECK(b.usageFor(ResourceCategory::Book).units == 0);
+    CHECK(c.holdings("AO1") == 0);
+    CHECK(c.holdings("AO2") == 0);
+
+    // A valid batch approves both requests.
+    auto approved = acq.processBatch({{"AO1", 1}, {"AO2", 1}}, true);
+    CHECK(approved.size() == 2);
+    CHECK(approved[0].approved && approved[1].approved);
+    CHECK(b.spent() == Money::of(200));
+    CHECK(b.usageFor(ResourceCategory::Book).units == 2);
+    CHECK(c.holdings("AO1") == 1);
+    CHECK(c.holdings("AO2") == 1);
+    CHECK(acq.history().size() == 4);
+}
+
 int main() {
     testMoney();
     testResourcesAndCost();
@@ -630,6 +666,7 @@ int main() {
     testAcquisition();
     testDepartmentBudgets();
     testBudgetRollover();
+    testBatchAllOrNothing();
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;
 }
