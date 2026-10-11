@@ -171,6 +171,24 @@ void Budget::refund(ResourceCategory c, int units, Money cost,
     }
 }
 
+Budget Budget::nextYear(int rolloverPercent) const {
+    if (rolloverPercent < 0 || rolloverPercent > 100) {
+        throw std::invalid_argument(
+            "rollover percentage must be between 0 and 100");
+    }
+
+    // Round to the nearest minor currency unit without floating-point math.
+    const auto unspent = remaining().minorUnits();
+    const auto rollover =
+        (unspent / 100) * rolloverPercent +
+        ((unspent % 100) * rolloverPercent + 50) / 100;
+
+    Budget next(total_ + Money::fromMinor(rollover));
+    next.quotas_ = quotas_;
+    next.titleLimits_ = titleLimits_;
+    return next;
+}
+
 void Budget::print(std::ostream& os) const {
     os << "Budget: total " << total_ << ", spent " << spent_ << ", remaining "
        << remaining() << "\n";

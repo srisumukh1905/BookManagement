@@ -591,6 +591,29 @@ static void testDepartmentBudgets() {
     CHECK(c.holdings("D1") == 2);
 }
 
+
+static void testBudgetRollover() {
+    Budget b(Money::of(1000));
+    b.setQuota(ResourceCategory::Book, {10, Money::of(500)});
+    b.setTitleLimit(ResourceCategory::Book, 3);
+    b.commit(ResourceCategory::Book, 2, Money::of(200), "Used Title");
+
+    Budget half = b.nextYear(50);
+    CHECK(half.total() == Money::of(1400));
+    CHECK(half.spent() == Money{});
+    CHECK(half.remaining() == Money::of(1400));
+    CHECK(half.quotaFor(ResourceCategory::Book)->maxUnits == 10);
+    CHECK(half.quotaFor(ResourceCategory::Book)->maxSpend == Money::of(500));
+    CHECK(half.usageFor(ResourceCategory::Book).units == 0);
+    CHECK(half.usageFor(ResourceCategory::Book).spent == Money{});
+    CHECK(half.titleLimitFor(ResourceCategory::Book).value() == 3);
+    CHECK(half.distinctTitlesUsed(ResourceCategory::Book) == 0);
+    CHECK(b.nextYear(0).total() == Money::of(1000));
+    CHECK(b.nextYear(100).total() == Money::of(1800));
+    CHECK_THROWS(b.nextYear(-1), std::invalid_argument);
+    CHECK_THROWS(b.nextYear(101), std::invalid_argument);
+}
+
 int main() {
     testMoney();
     testResourcesAndCost();
@@ -606,6 +629,7 @@ int main() {
     testBudget();
     testAcquisition();
     testDepartmentBudgets();
+    testBudgetRollover();
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;
 }

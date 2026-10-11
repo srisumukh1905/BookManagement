@@ -64,6 +64,11 @@ public:
     void refund(ResourceCategory c, int units, Money cost,
                 const std::string& title, bool releaseTitle = false);
 
+    // Creates next year's budget with a percentage of this year's
+    // unspent amount added to the same base allocation.
+    // Carries over quota and title-limit settings, but resets usage.
+    Budget nextYear(int rolloverPercent) const;
+
     void print(std::ostream& os) const;
 
 private:

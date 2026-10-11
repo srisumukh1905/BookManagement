@@ -134,6 +134,18 @@ int main() {
     std::cout << "\n=== Physics department budget ===\n";
     acq.departmentBudget("Physics").print(std::cout);
 
+    std::cout << "\n=== Year-end budget rollover demo (Q10) ===\n";
+    Budget thisYear(Money::of(10000));
+    thisYear.setQuota(ResourceCategory::Book, {20, Money::of(8000)});
+    thisYear.commit(ResourceCategory::Book, 4, Money::of(2000),
+                    "Example Book");
+    std::cout << "This year's budget:\n";
+    thisYear.print(std::cout);
+
+    Budget nextYear = thisYear.nextYear(50);
+    std::cout << "\nNext year's budget (50% of unspent amount carried forward):\n";
+    nextYear.print(std::cout);
+
     std::cout << "\n=== Holdings ===\n";
     for (const Resource* r : catalog.all())
         std::cout << "  " << r->id() << ": " << catalog.holdings(r->id())

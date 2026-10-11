@@ -27,9 +27,17 @@ Added cancellation records, post-tax refunds, holdings reversal, and protection 
 ## Q9 — Department budgets and quotas
 Added independent department budgets and quotas. Purchase and batch requests identify the charged department, and cancellation refunds return to that department.
 
+## Q10 — Year-end budget rollover
+Added `Budget::nextYear(rolloverPercent)`. The next year's budget retains
+the current base allocation and adds the configured percentage of the
+current year's unspent amount. Quota and title-limit settings carry forward,
+while spending, category usage, and title usage reset.
+
+The rollover percentage must be between 0 and 100 inclusive.
+
 ## Verification
 Build with `cmake --build build`.
 Run tests with `./build/bookmgmt_tests`.
-The current test suite passes 230/230 checks.
+The current test suite passes 243/243 checks.
 
-This file will be updated as Q10–Q16 are implemented.
+Questions Q11–Q16 remain to be implemented.
