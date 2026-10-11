@@ -99,11 +99,40 @@ int main() {
               << "; refunded post-tax amount: "
               << Money::fromMinor(-cancelled.cost.minorUnits()) << "\n";
 
+    std::cout << "\n=== Department budgets demo (Q9) ===\n";
+    Budget& computerScience =
+        acq.addDepartment("Computer Science", Money::of(3000));
+    computerScience.setQuota(
+        ResourceCategory::Book, {5, Money::of(2500)});
+
+    Budget& physics = acq.addDepartment("Physics", Money::of(1000));
+    physics.setQuota(ResourceCategory::Book, {1, Money::of(500)});
+
+    const auto departmentResults = acq.processBatch({
+        {"B001", 2, "Computer Science"},
+        {"B001", 1, "Physics"},
+        {"B001", 1, "Physics"} // rejected: Physics quota is one copy
+    });
+
+    for (const auto& result : departmentResults) {
+        std::cout << "Department request #" << result.orderNo << " ("
+                  << result.department << "): "
+                  << (result.approved ? "APPROVED" : "REJECTED");
+        if (!result.approved) std::cout << " - " << result.reason;
+        std::cout << "\n";
+    }
+
     std::cout << "\n=== Acquisition report ===\n";
     acq.printReport(std::cout);
 
     std::cout << "\n=== Budget ===\n";
     budget.print(std::cout);
+
+    std::cout << "\n=== Computer Science department budget ===\n";
+    acq.departmentBudget("Computer Science").print(std::cout);
+
+    std::cout << "\n=== Physics department budget ===\n";
+    acq.departmentBudget("Physics").print(std::cout);
 
     std::cout << "\n=== Holdings ===\n";
     for (const Resource* r : catalog.all())

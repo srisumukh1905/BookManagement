@@ -541,6 +541,56 @@ static void testAcquisition() {
     CHECK(acq.history().size() == 6);
 }
 
+
+static void testDepartmentBudgets() {
+    Catalog c;
+    c.emplace<Book>("D1", "Shared Title", std::vector<std::string>{"A"},
+                    "isbn", "P", 2024, Money::of(100));
+
+    Budget defaultBudget(Money::of(1000));
+    AcquisitionManager acq(c, defaultBudget);
+
+    Budget& cs = acq.addDepartment("Computer Science", Money::of(100));
+    Budget& physics = acq.addDepartment("Physics", Money::of(300));
+
+    cs.setQuota(ResourceCategory::Book, {1, Money::of(100)});
+    physics.setQuota(ResourceCategory::Book, {2, Money::of(200)});
+    cs.setTitleLimit(ResourceCategory::Book, 1);
+    physics.setTitleLimit(ResourceCategory::Book, 1);
+
+    std::string why;
+    CHECK(acq.canPurchase("D1", 1, "Computer Science", &why));
+
+    const int csOrderNo =
+        acq.purchase("D1", 1, "Computer Science").orderNo;
+    CHECK(cs.spent() == Money::of(100));
+    CHECK(acq.history().back().department == "Computer Science");
+    CHECK(!acq.canPurchase("D1", 1, "Computer Science", &why));
+
+    auto results = acq.processBatch({
+        {"D1", 1, "Physics"},
+        {"D1", 1, "Physics"},
+        {"D1", 1, "Unknown Department"}
+    });
+
+    CHECK(results.size() == 3);
+    CHECK(results[0].approved && results[0].department == "Physics");
+    CHECK(results[1].approved && results[1].department == "Physics");
+    CHECK(!results[2].approved);
+    CHECK(results[2].reason.find("unknown department") != std::string::npos);
+    CHECK(physics.spent() == Money::of(200));
+    CHECK(defaultBudget.spent() == Money{});
+    CHECK(!acq.canPurchase("D1", 1, "Physics", &why));
+
+    const auto& cancelled = acq.cancel(csOrderNo);
+    CHECK(cancelled.isCancellation);
+    CHECK(cancelled.department == "Computer Science");
+    CHECK(cs.spent() == Money{});
+    CHECK(physics.spent() == Money::of(200));
+    CHECK(acq.canPurchase("D1", 1, "Computer Science", &why));
+    CHECK(c.holdings("D1") == 2);
+}
+
 int main() {
     testMoney();
     testResourcesAndCost();
@@ -555,6 +605,7 @@ int main() {
     testCatalog();
     testBudget();
     testAcquisition();
+    testDepartmentBudgets();
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;
 }

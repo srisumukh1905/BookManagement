@@ -13,6 +13,46 @@ namespace bookmgmt {
 AcquisitionManager::AcquisitionManager(Catalog& catalog, Budget& budget)
     : catalog_(catalog), budget_(budget) {}
 
+Budget& AcquisitionManager::addDepartment(const std::string& name,
+                                          Money total) {
+    if (name.empty()) {
+        throw std::invalid_argument("department name cannot be empty");
+    }
+
+    auto result = departmentBudgets_.emplace(name, Budget(total));
+    if (!result.second) {
+        throw std::invalid_argument("department already exists: " + name);
+    }
+    return result.first->second;
+}
+
+Budget& AcquisitionManager::departmentBudget(const std::string& name) {
+    auto it = departmentBudgets_.find(name);
+    if (it == departmentBudgets_.end()) {
+        throw std::invalid_argument("unknown department: " + name);
+    }
+    return it->second;
+}
+
+const Budget& AcquisitionManager::departmentBudget(
+    const std::string& name) const {
+    auto it = departmentBudgets_.find(name);
+    if (it == departmentBudgets_.end()) {
+        throw std::invalid_argument("unknown department: " + name);
+    }
+    return it->second;
+}
+
+Budget& AcquisitionManager::budgetForRequest(
+    const std::string& department) {
+    return department.empty() ? budget_ : departmentBudget(department);
+}
+
+const Budget& AcquisitionManager::budgetForRequest(
+    const std::string& department) const {
+    return department.empty() ? budget_ : departmentBudget(department);
+}
+
 void AcquisitionManager::setTaxRates(int printPercent, int electronicPercent) {
     if (printPercent < 0 || printPercent > 100 ||
         electronicPercent < 0 || electronicPercent > 100) {
@@ -52,6 +92,12 @@ Money AcquisitionManager::quote(const std::string& id, int quantity) const {
 
 bool AcquisitionManager::canPurchase(const std::string& id, int quantity,
                                      std::string* reason) const {
+    return canPurchase(id, quantity, std::string{}, reason);
+}
+
+bool AcquisitionManager::canPurchase(const std::string& id, int quantity,
+                                     const std::string& department,
+                                     std::string* reason) const {
     std::string why;
 
     if (const Resource* resource = catalog_.find(id)) {
@@ -60,8 +106,13 @@ bool AcquisitionManager::canPurchase(const std::string& id, int quantity,
         } else {
             const Money preTaxCost = resource->costFor(quantity);
             const Money cost = applyTax(*resource, preTaxCost);
-            why = budget_.check(resource->category(), quantity, cost,
-                                resource->title());
+
+            try {
+                why = budgetForRequest(department).check(
+                    resource->category(), quantity, cost, resource->title());
+            } catch (const std::invalid_argument& error) {
+                why = error.what();
+            }
         }
     } else {
         why = "resource not found: " + id;
@@ -74,13 +125,13 @@ bool AcquisitionManager::canPurchase(const std::string& id, int quantity,
 PurchaseRecord& AcquisitionManager::record(
     const Resource* resource, const std::string& id, int quantity,
     Money preTaxCost, Money cost, bool approved, std::string reason,
-    bool isCancellation, int cancelsOrderNo) {
+    bool isCancellation, int cancelsOrderNo, std::string department) {
     history_.push_back(PurchaseRecord{
         nextOrderNo_++, id,
         resource ? resource->title() : std::string("(unknown)"),
         resource ? resource->category() : ResourceCategory::Book,
         quantity, preTaxCost, cost, approved, std::move(reason),
-        isCancellation, cancelsOrderNo});
+        isCancellation, cancelsOrderNo, std::move(department)});
     return history_.back();
 }
 
@@ -93,17 +144,23 @@ bool AcquisitionManager::hasCancellation(int orderNo) const {
     return false;
 }
 
-const PurchaseRecord& AcquisitionManager::purchase(const std::string& id,
-                                                   int quantity) {
+const PurchaseRecord& AcquisitionManager::purchase(
+    const std::string& id, int quantity) {
+    return purchase(id, quantity, std::string{});
+}
+
+const PurchaseRecord& AcquisitionManager::purchase(
+    const std::string& id, int quantity, const std::string& department) {
     const Resource& resource = catalog_.get(id);
     const Money preTaxCost = resource.costFor(quantity);
     const Money cost = applyTax(resource, preTaxCost);
 
-    // Quotas and the total budget are checked against the post-tax cost.
-    budget_.commit(resource.category(), quantity, cost, resource.title());
+    budgetForRequest(department).commit(
+        resource.category(), quantity, cost, resource.title());
     catalog_.addHoldings(id, quantity);
 
-    return record(&resource, id, quantity, preTaxCost, cost, true, {});
+    return record(&resource, id, quantity, preTaxCost, cost, true, {},
+                  false, 0, department);
 }
 
 const PurchaseRecord& AcquisitionManager::cancel(int orderNo) {
@@ -146,7 +203,8 @@ const PurchaseRecord& AcquisitionManager::cancel(int orderNo) {
         if (entry.isCancellation || !entry.approved ||
             entry.orderNo == original.orderNo ||
             entry.category != original.category ||
-            entry.title != original.title) {
+            entry.title != original.title ||
+            entry.department != original.department) {
             continue;
         }
         if (!hasCancellation(entry.orderNo)) {
@@ -156,8 +214,9 @@ const PurchaseRecord& AcquisitionManager::cancel(int orderNo) {
     }
 
     // Reverse the original post-tax budget commitment and catalogue holdings.
-    budget_.refund(original.category, original.quantity, original.cost,
-                   original.title, releaseTitle);
+    budgetForRequest(original.department).refund(
+        original.category, original.quantity, original.cost,
+        original.title, releaseTitle);
     catalog_.addHoldings(original.resourceId, -original.quantity);
 
     const Money negativePreTax =
@@ -168,7 +227,7 @@ const PurchaseRecord& AcquisitionManager::cancel(int orderNo) {
     return record(&resource, original.resourceId, -original.quantity,
                   negativePreTax, negativeCost, true,
                   "cancels order #" + std::to_string(original.orderNo),
-                  true, original.orderNo);
+                  true, original.orderNo, original.department);
 }
 
 std::vector<PurchaseRecord> AcquisitionManager::processBatch(
@@ -189,16 +248,25 @@ std::vector<PurchaseRecord> AcquisitionManager::processBatch(
         } else {
             preTaxCost = resource->costFor(request.quantity);
             cost = applyTax(*resource, preTaxCost);
-            why = budget_.check(resource->category(), request.quantity, cost,
-                                resource->title());
+
+            try {
+                why = budgetForRequest(request.department).check(
+                    resource->category(), request.quantity, cost,
+                    resource->title());
+            } catch (const std::invalid_argument& error) {
+                why = error.what();
+            }
         }
 
         if (why.empty()) {
-            results.push_back(purchase(request.resourceId, request.quantity));
+            results.push_back(
+                purchase(request.resourceId, request.quantity,
+                         request.department));
         } else {
-            results.push_back(record(resource, request.resourceId,
-                                     request.quantity, preTaxCost, cost,
-                                     false, why));
+            results.push_back(record(
+                resource, request.resourceId, request.quantity,
+                preTaxCost, cost, false, why, false, 0,
+                request.department));
         }
     }
 
@@ -235,6 +303,10 @@ void AcquisitionManager::printReport(std::ostream& os) const {
            << entry.preTaxCost.toString()
            << "  post-tax " << std::setw(10) << entry.cost.toString()
            << std::left << "  " << entry.title;
+
+        if (!entry.department.empty()) {
+            os << "  [department: " << entry.department << "]";
+        }
 
         if (entry.isCancellation) {
             os << "\n        cancellation of order #" << entry.cancelsOrderNo;

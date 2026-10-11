@@ -2,6 +2,7 @@
 // AcquisitionManager: purchase requests, taxes, budget enforcement and history.
 
 #include <iosfwd>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -13,6 +14,7 @@ namespace bookmgmt {
 struct PurchaseRequest {
     std::string resourceId;
     int quantity;  // copies for print, seats for electronic
+    std::string department;  // empty uses the original single budget
 };
 
 struct PurchaseRecord {
@@ -27,11 +29,17 @@ struct PurchaseRecord {
     std::string reason;
     bool isCancellation = false;
     int cancelsOrderNo = 0;
+    std::string department;
 };
 
 class AcquisitionManager {
 public:
     AcquisitionManager(Catalog& catalog, Budget& budget);
+
+    // Create an independent budget for a named department.
+    Budget& addDepartment(const std::string& name, Money total);
+    Budget& departmentBudget(const std::string& name);
+    const Budget& departmentBudget(const std::string& name) const;
 
     // Configure whole-number tax percentages (0 through 100).
     void setTaxRates(int printPercent, int electronicPercent);
@@ -46,8 +54,13 @@ public:
 
     bool canPurchase(const std::string& id, int quantity,
                      std::string* reason = nullptr) const;
+    bool canPurchase(const std::string& id, int quantity,
+                     const std::string& department,
+                     std::string* reason = nullptr) const;
 
     const PurchaseRecord& purchase(const std::string& id, int quantity);
+    const PurchaseRecord& purchase(const std::string& id, int quantity,
+                                    const std::string& department);
 
     // Cancel an approved order once, refunding its post-tax cost and units.
     // The original history record is kept and a separate cancellation
@@ -70,11 +83,15 @@ private:
     PurchaseRecord& record(const Resource* r, const std::string& id, int qty,
                            Money preTaxCost, Money cost, bool approved,
                            std::string reason, bool isCancellation = false,
-                           int cancelsOrderNo = 0);
+                           int cancelsOrderNo = 0,
+                           std::string department = {});
     bool hasCancellation(int orderNo) const;
+    Budget& budgetForRequest(const std::string& department);
+    const Budget& budgetForRequest(const std::string& department) const;
 
     Catalog& catalog_;
     Budget& budget_;
+    std::map<std::string, Budget> departmentBudgets_;
     std::vector<PurchaseRecord> history_;
     int nextOrderNo_ = 1;
 
