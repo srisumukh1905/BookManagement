@@ -64,8 +64,10 @@ with existing code. Addition, subtraction, and comparisons require matching
 currency codes and throw `std::invalid_argument` when currencies differ.
 Added tests and a demo for currency-aware amounts and cross-currency rejection.
 
+## Q16 — Standard assertions
+Replaced the custom `CHECK` and `CHECK_THROWS` test macros with standard C++ `assert` assertions. Added an `assertThrows` helper to verify that expected exception types are thrown, preserving the exception-checking behavior.
+
 ## Verification
 Build with `cmake --build build`.
 Run tests with `./build/bookmgmt_tests`.
-The current test suite passes 340/340 checks.
-Question Q16 remains to be implemented.
+The build succeeds and all tests pass.
