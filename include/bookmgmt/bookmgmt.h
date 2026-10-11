@@ -6,6 +6,7 @@
 #include "bookmgmt/Journal.h"
 #include "bookmgmt/Budget.h"
 #include "bookmgmt/Catalog.h"
+#include "bookmgmt/Lending.h"
 #include "bookmgmt/ElectronicResource.h"
 #include "bookmgmt/EBook.h"
 #include "bookmgmt/AudioBook.h"

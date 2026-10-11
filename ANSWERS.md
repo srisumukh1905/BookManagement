@@ -52,9 +52,15 @@ Added case-insensitive author searches across books and e-books, ISBN/ISSN
 identifier searches across books, e-books and journals, and inclusive
 publication-year range searches. Reversed year ranges are rejected.
 
+## Q14 — Lending
+Added a `LendingManager` that tracks borrowed print copies and active
+electronic-resource sessions by patron. Borrowing and session opening are
+limited by catalogue holdings; returns and session closure release capacity.
+Invalid operations, duplicate active use, and unknown resources are rejected.
+
 ## Verification
 Build with `cmake --build build`.
 Run tests with `./build/bookmgmt_tests`.
-The current test suite passes 299/299 checks.
+The current test suite passes 328/328 checks.
 
-Questions Q14–Q16 remain to be implemented.
+Questions Q15–Q16 remain to be implemented.

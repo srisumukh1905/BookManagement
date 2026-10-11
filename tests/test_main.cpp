@@ -736,6 +736,67 @@ static void testCatalogAdvancedSearch() {
     CHECK_THROWS(c.searchYearRange(2023, 2022), std::invalid_argument);
 }
 
+
+static void testLending() {
+    Catalog c;
+    c.emplace<Book>("L1", "Lending Book", std::vector<std::string>{"Author"},
+                    "ISBN-L1", "Publisher", 2024, Money::of(100));
+    c.emplace<ElectronicResource>(
+        "L2", "Licensed Database", "Publisher", 2024, Money::of(10),
+        "url", LicenseModel::Perpetual);
+
+    c.addHoldings("L1", 2);
+    c.addHoldings("L2", 2);
+
+    LendingManager lending(c);
+
+    CHECK(lending.availableCopies("L1") == 2);
+    CHECK(lending.borrowedCopies("L1") == 0);
+
+    lending.borrow("L1", "Patron-A");
+    CHECK(lending.borrowedCopies("L1") == 1);
+    CHECK(lending.availableCopies("L1") == 1);
+    lending.borrow("L1", "Patron-B");
+    CHECK(lending.availableCopies("L1") == 0);
+
+    CHECK_THROWS(lending.borrow("L1", "Patron-C"), std::invalid_argument);
+    CHECK_THROWS(lending.borrow("L1", "Patron-A"), std::invalid_argument);
+
+    lending.returnCopy("L1", "Patron-A");
+    CHECK(lending.availableCopies("L1") == 1);
+    CHECK(lending.borrowedCopies("L1") == 1);
+    CHECK_THROWS(lending.returnCopy("L1", "Patron-A"), std::invalid_argument);
+
+    CHECK_THROWS(lending.borrow("L2", "Patron-D"), std::invalid_argument);
+    CHECK_THROWS(lending.availableSeats("L1"), std::invalid_argument);
+
+    CHECK(lending.availableSeats("L2") == 2);
+    CHECK(lending.activeSessions("L2") == 0);
+    lending.openSession("L2", "Patron-A");
+    lending.openSession("L2", "Patron-B");
+    CHECK(lending.activeSessions("L2") == 2);
+    CHECK(lending.availableSeats("L2") == 0);
+
+    CHECK_THROWS(lending.openSession("L2", "Patron-C"), std::invalid_argument);
+    CHECK_THROWS(lending.openSession("L2", "Patron-A"), std::invalid_argument);
+    CHECK_THROWS(lending.openSession("L1", "Patron-C"), std::invalid_argument);
+    CHECK_THROWS(lending.availableCopies("L2"), std::invalid_argument);
+
+    lending.closeSession("L2", "Patron-A");
+    CHECK(lending.activeSessions("L2") == 1);
+    CHECK(lending.availableSeats("L2") == 1);
+    CHECK_THROWS(lending.closeSession("L2", "Patron-A"), std::invalid_argument);
+
+    lending.closeSession("L2", "Patron-B");
+    CHECK(lending.availableSeats("L2") == 2);
+    CHECK(lending.borrowedCopies("L1") == 1);
+
+    CHECK_THROWS(lending.borrow("missing", "Patron-A"), NotFoundError);
+    CHECK_THROWS(lending.openSession("missing", "Patron-A"), NotFoundError);
+    CHECK_THROWS(lending.borrow("L1", ""), std::invalid_argument);
+    CHECK_THROWS(lending.openSession("L2", ""), std::invalid_argument);
+}
+
 int main() {
     testMoney();
     testResourcesAndCost();
@@ -755,6 +816,7 @@ int main() {
     testBatchAllOrNothing();
     testVendors();
     testCatalogAdvancedSearch();
+    testLending();
     std::cout << (g_checks - g_failures) << "/" << g_checks << " checks passed\n";
     return g_failures == 0 ? 0 : 1;
 }

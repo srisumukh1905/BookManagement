@@ -225,6 +225,38 @@ int main() {
     for (const Resource* r : catalog.searchYearRange(2024, 2026))
         std::cout << "  " << r->summary() << "\n";
 
+    std::cout << "\n=== Lending demo (Q14) ===\n";
+    Catalog lendingCatalog;
+    lendingCatalog.emplace<Book>(
+        "LD1", "Lending Demo Book", std::vector<std::string>{"Demo Author"},
+        "ISBN-LD1", "Demo Press", 2025, Money::of(80));
+    lendingCatalog.emplace<ElectronicResource>(
+        "LD2", "Lending Demo Database", "Demo Publisher", 2025,
+        Money::of(10), "https://example.test/database",
+        LicenseModel::Perpetual);
+
+    lendingCatalog.addHoldings("LD1", 1);
+    lendingCatalog.addHoldings("LD2", 2);
+    LendingManager lending(lendingCatalog);
+
+    lending.borrow("LD1", "Patron-1");
+    std::cout << "Borrowed print copies: "
+              << lending.borrowedCopies("LD1")
+              << ", available copies: "
+              << lending.availableCopies("LD1") << "\n";
+    lending.returnCopy("LD1", "Patron-1");
+    std::cout << "After return, available copies: "
+              << lending.availableCopies("LD1") << "\n";
+
+    lending.openSession("LD2", "Patron-1");
+    std::cout << "Active electronic sessions: "
+              << lending.activeSessions("LD2")
+              << ", available seats: "
+              << lending.availableSeats("LD2") << "\n";
+    lending.closeSession("LD2", "Patron-1");
+    std::cout << "After closing session, available seats: "
+              << lending.availableSeats("LD2") << "\n";
+
     // Direct purchase: errors are reported with exceptions
     std::cout << "\n=== Direct purchase that breaks a quota ===\n";
     try {
