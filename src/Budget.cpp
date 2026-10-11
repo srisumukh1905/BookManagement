@@ -141,6 +141,36 @@ void Budget::commit(ResourceCategory c, int units, Money cost,
     if (!title.empty()) titlesUsed_[c].insert(title);
 }
 
+void Budget::refund(ResourceCategory c, int units, Money cost,
+                    const std::string& title, bool releaseTitle) {
+    if (units <= 0) {
+        throw std::invalid_argument("refund units must be positive");
+    }
+    if (cost.isNegative()) {
+        throw std::invalid_argument("refund cost must not be negative");
+    }
+
+    auto it = usage_.find(c);
+    if (it == usage_.end() || units > it->second.units) {
+        throw std::invalid_argument("refund exceeds recorded category units");
+    }
+    if (cost > it->second.spent || cost > spent_) {
+        throw std::invalid_argument("refund exceeds recorded spending");
+    }
+
+    it->second.units -= units;
+    it->second.spent -= cost;
+    spent_ -= cost;
+
+    if (releaseTitle && !title.empty()) {
+        auto titles = titlesUsed_.find(c);
+        if (titles != titlesUsed_.end()) {
+            titles->second.erase(title);
+            if (titles->second.empty()) titlesUsed_.erase(titles);
+        }
+    }
+}
+
 void Budget::print(std::ostream& os) const {
     os << "Budget: total " << total_ << ", spent " << spent_ << ", remaining "
        << remaining() << "\n";

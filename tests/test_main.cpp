@@ -420,6 +420,35 @@ static void testTitleLimits() {
     CHECK(budget.distinctTitlesUsed(ResourceCategory::Book) == 3);
 }
 
+
+static void testCancellation() {
+    Catalog c;
+    c.emplace<Book>("CX1", "Cancel Me", std::vector<std::string>{"A"},
+                    "ISBN-CX", "Publisher", 2025, Money::of(100));
+    Budget b(Money::of(1000));
+    b.setQuota(ResourceCategory::Book, {5, Money::of(500)});
+    AcquisitionManager acq(c, b);
+    acq.setTaxRates(10, 20);
+
+    acq.purchase("CX1", 2);
+    CHECK(b.spent() == Money::of(220));
+    CHECK(c.holdings("CX1") == 2);
+
+    const PurchaseRecord cancelled = acq.cancel(1);
+    CHECK(cancelled.isCancellation);
+    CHECK(cancelled.cancelsOrderNo == 1);
+    CHECK(cancelled.quantity == -2);
+    CHECK(cancelled.preTaxCost == Money::of(-200));
+    CHECK(cancelled.cost == Money::of(-220));
+    CHECK(acq.history().size() == 2);
+    CHECK(!acq.history()[0].isCancellation);
+    CHECK(b.spent() == Money{});
+    CHECK(b.usageFor(ResourceCategory::Book).units == 0);
+    CHECK(c.holdings("CX1") == 0);
+    CHECK(acq.totalPreTax() == Money{});
+    CHECK(acq.totalSpent() == Money{});
+    CHECK_THROWS(acq.cancel(1), std::invalid_argument);
+}
 static void testCatalog() {
     Catalog c;
     c.emplace<Book>("B1", "Clean Code", std::vector<std::string>{"M"}, "i", "P", 2008,
@@ -519,6 +548,7 @@ int main() {
     testBulkDiscounts();
     testTaxes();
     testTitleLimits();
+    testCancellation();
     testJournal();
     testEBook();
     testAudioBookAndThesis();

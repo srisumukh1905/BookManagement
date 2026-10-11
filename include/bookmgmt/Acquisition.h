@@ -25,6 +25,8 @@ struct PurchaseRecord {
     Money cost;  // final post-tax amount
     bool approved;
     std::string reason;
+    bool isCancellation = false;
+    int cancelsOrderNo = 0;
 };
 
 class AcquisitionManager {
@@ -47,6 +49,11 @@ public:
 
     const PurchaseRecord& purchase(const std::string& id, int quantity);
 
+    // Cancel an approved order once, refunding its post-tax cost and units.
+    // The original history record is kept and a separate cancellation
+    // record is appended. Throws std::invalid_argument for invalid orders.
+    const PurchaseRecord& cancel(int orderNo);
+
     // Processes requests in order; every outcome is recorded.
     std::vector<PurchaseRecord> processBatch(
         const std::vector<PurchaseRequest>& reqs);
@@ -62,7 +69,9 @@ private:
 
     PurchaseRecord& record(const Resource* r, const std::string& id, int qty,
                            Money preTaxCost, Money cost, bool approved,
-                           std::string reason);
+                           std::string reason, bool isCancellation = false,
+                           int cancelsOrderNo = 0);
+    bool hasCancellation(int orderNo) const;
 
     Catalog& catalog_;
     Budget& budget_;

@@ -58,6 +58,12 @@ public:
     void commit(ResourceCategory c, int units, Money cost,
                 const std::string& title = {});
 
+    // Reverses a previously committed purchase. Costs are positive
+    // refund amounts; releaseTitle removes the title slot if no active
+    // purchase of that title remains in the category.
+    void refund(ResourceCategory c, int units, Money cost,
+                const std::string& title, bool releaseTitle = false);
+
     void print(std::ostream& os) const;
 
 private:

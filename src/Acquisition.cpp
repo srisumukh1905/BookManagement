@@ -73,13 +73,24 @@ bool AcquisitionManager::canPurchase(const std::string& id, int quantity,
 
 PurchaseRecord& AcquisitionManager::record(
     const Resource* resource, const std::string& id, int quantity,
-    Money preTaxCost, Money cost, bool approved, std::string reason) {
+    Money preTaxCost, Money cost, bool approved, std::string reason,
+    bool isCancellation, int cancelsOrderNo) {
     history_.push_back(PurchaseRecord{
         nextOrderNo_++, id,
         resource ? resource->title() : std::string("(unknown)"),
         resource ? resource->category() : ResourceCategory::Book,
-        quantity, preTaxCost, cost, approved, std::move(reason)});
+        quantity, preTaxCost, cost, approved, std::move(reason),
+        isCancellation, cancelsOrderNo});
     return history_.back();
+}
+
+bool AcquisitionManager::hasCancellation(int orderNo) const {
+    for (const auto& entry : history_) {
+        if (entry.isCancellation && entry.cancelsOrderNo == orderNo) {
+            return true;
+        }
+    }
+    return false;
 }
 
 const PurchaseRecord& AcquisitionManager::purchase(const std::string& id,
@@ -93,6 +104,71 @@ const PurchaseRecord& AcquisitionManager::purchase(const std::string& id,
     catalog_.addHoldings(id, quantity);
 
     return record(&resource, id, quantity, preTaxCost, cost, true, {});
+}
+
+const PurchaseRecord& AcquisitionManager::cancel(int orderNo) {
+    // Find the original order. Copy it before appending to history, because
+    // adding a record may invalidate references into the history vector.
+    const PurchaseRecord* found = nullptr;
+    for (const auto& entry : history_) {
+        if (entry.orderNo == orderNo) {
+            found = &entry;
+            break;
+        }
+    }
+
+    if (!found) {
+        throw std::invalid_argument("order number not found: " +
+                                    std::to_string(orderNo));
+    }
+    if (found->isCancellation) {
+        throw std::invalid_argument("cannot cancel a cancellation record");
+    }
+    if (!found->approved) {
+        throw std::invalid_argument("cannot cancel a rejected order");
+    }
+    if (hasCancellation(orderNo)) {
+        throw std::invalid_argument("order has already been cancelled");
+    }
+
+    const PurchaseRecord original = *found;
+    const Resource& resource = catalog_.get(original.resourceId);
+
+    if (catalog_.holdings(original.resourceId) < original.quantity) {
+        throw std::invalid_argument(
+            "not enough holdings remain to cancel this order");
+    }
+
+    // Keep the title slot if any other approved, uncancelled order uses the
+    // same title in the same category.
+    bool releaseTitle = true;
+    for (const auto& entry : history_) {
+        if (entry.isCancellation || !entry.approved ||
+            entry.orderNo == original.orderNo ||
+            entry.category != original.category ||
+            entry.title != original.title) {
+            continue;
+        }
+        if (!hasCancellation(entry.orderNo)) {
+            releaseTitle = false;
+            break;
+        }
+    }
+
+    // Reverse the original post-tax budget commitment and catalogue holdings.
+    budget_.refund(original.category, original.quantity, original.cost,
+                   original.title, releaseTitle);
+    catalog_.addHoldings(original.resourceId, -original.quantity);
+
+    const Money negativePreTax =
+        Money::fromMinor(-original.preTaxCost.minorUnits());
+    const Money negativeCost = Money::fromMinor(-original.cost.minorUnits());
+
+    // Retain the original order and append a separate reversal record.
+    return record(&resource, original.resourceId, -original.quantity,
+                  negativePreTax, negativeCost, true,
+                  "cancels order #" + std::to_string(original.orderNo),
+                  true, original.orderNo);
 }
 
 std::vector<PurchaseRecord> AcquisitionManager::processBatch(
@@ -149,16 +225,20 @@ void AcquisitionManager::printReport(std::ostream& os) const {
     os << "Order history (" << history_.size() << " orders)\n";
 
     for (const auto& entry : history_) {
+        const char* status = entry.isCancellation
+                                 ? "CANCELLED"
+                                 : (entry.approved ? "APPROVED" : "REJECTED");
         os << "  #" << std::setw(3) << std::left << entry.orderNo << " "
-           << (entry.approved ? "APPROVED" : "REJECTED") << "  "
-           << std::setw(6) << entry.resourceId << " x"
+           << status << "  " << std::setw(6) << entry.resourceId << " x"
            << std::setw(3) << entry.quantity
            << "  pre-tax " << std::setw(10) << std::right
            << entry.preTaxCost.toString()
            << "  post-tax " << std::setw(10) << entry.cost.toString()
            << std::left << "  " << entry.title;
 
-        if (!entry.approved) {
+        if (entry.isCancellation) {
+            os << "\n        cancellation of order #" << entry.cancelsOrderNo;
+        } else if (!entry.approved) {
             os << "\n        reason: " << entry.reason;
         }
         os << "\n";

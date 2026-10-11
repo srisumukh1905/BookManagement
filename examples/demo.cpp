@@ -93,6 +93,12 @@ int main() {
         {"T001", 1},   // approved: free thesis
     });
 
+    std::cout << "\n=== Cancellation demo ===\n";
+    const PurchaseRecord& cancelled = acq.cancel(9);
+    std::cout << "Cancelled order #" << cancelled.cancelsOrderNo
+              << "; refunded post-tax amount: "
+              << Money::fromMinor(-cancelled.cost.minorUnits()) << "\n";
+
     std::cout << "\n=== Acquisition report ===\n";
     acq.printReport(std::cout);
 
