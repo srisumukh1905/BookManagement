@@ -71,3 +71,11 @@ Replaced the custom `CHECK` and `CHECK_THROWS` test macros with standard C++ `as
 Build with `cmake --build build`.
 Run tests with `./build/bookmgmt_tests`.
 The build succeeds and all tests pass.
+
+
+AI prompts
+- Help me complete this assignment step by step according to the given requirements. Check my existing code before making changes, and help me implement each feature without breaking the functionality that is already working.
+- Getting errors or unexpected results in the code. Help me understand what is causing the problem and fix it without unnecessarily changing the rest of the implementation.
+- Help me test the functionality I have implemented. Check normal cases, boundary conditions, and invalid inputs, and help me fix any issues found during testing.
+- Review the implementation against the assignment requirements. Check whether the different features work together correctly, whether the tests pass, and whether anything important is missing.
+- Help me update the assignment documentation to match the final implementation. Check the project status, verify the tests, organize the completed work, and prepare the final submission.
